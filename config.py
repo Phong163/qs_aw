@@ -7,7 +7,6 @@ def get_config():
         "lr": 10**-4,
         "seq_len": 150,
         "d_model": 512,
-        "language":"vi",
         "question": "question",
         "answer": "answer",
         "model_folder": "weights",

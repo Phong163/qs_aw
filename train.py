@@ -16,16 +16,14 @@ from pathlib import Path #thư viện cho phép làm việc với đường dẫ
 
 # Huggingface datasets and tokenizers
 from datasets import load_dataset
-from tokenizers import Tokenizer #Module tokenizers cung cấp các công cụ để xử lý và mã hóa văn bản.
+from tokenizers import Tokenizer 
 from tokenizers.models import WordLevel
 from tokenizers.trainers import WordLevelTrainer
 from tokenizers.pre_tokenizers import Whitespace
 
 import torchmetrics
 from torch.utils.tensorboard import SummaryWriter  #thư viện cho việc ghi log và hiển thị biểu đồ trong TensorBoard.
-from transformers import BertTokenizer
-from mfaq import MFAQ
-
+import json
 def greedy_decode(model, source, source_mask, tokenizer_src, tokenizer_tgt, max_len, device):
     sos_idx = tokenizer_tgt.token_to_id('[SOS]')
     eos_idx = tokenizer_tgt.token_to_id('[EOS]')
@@ -123,35 +121,48 @@ def run_validation(model, validation_ds, tokenizer_src, tokenizer_tgt, max_len, 
         writer.add_scalar('validation BLEU', bleu, global_step)
         writer.flush()
 
-def get_all_sentences(ds, lang):
+def get_all_sentences(ds):
     for item in ds:
-        yield item['translation'][lang]
+        item1 = item["qa_pairs"]
+        for item2 in item1:
+            yield item2["question"],item2["answer"]
 
-def get_or_build_tokenizer(config, ds, lang):
-    tokenizer_path = Path(config['tokenizer_file'].format(lang))
-    if not Path.exists(tokenizer_path):
+def get_or_build_tokenizer(config, ds, question, answer):
+    tokenizer_path_question = Path(config['tokenizer_file'].format(question))
+    tokenizer_path_answer = Path(config['tokenizer_file'].format(answer))
+    if not Path.exists(tokenizer_path_question) and  not Path.exists(tokenizer_path_question):
         # Most code taken from: https://huggingface.co/docs/tokenizers/quicktour
         tokenizer = Tokenizer(WordLevel(unk_token="[UNK]"))
         tokenizer.pre_tokenizer = Whitespace()
         trainer = WordLevelTrainer(special_tokens=["[UNK]", "[PAD]", "[SOS]", "[EOS]"], min_frequency=2)
-        tokenizer.train_from_iterator(get_all_sentences(ds, lang), trainer=trainer)
-        tokenizer.save(str(tokenizer_path))
+        tokenizer.train_from_iterator(get_all_sentences(ds), trainer=trainer)
+        tokenizer.save(str(tokenizer_path_question))
+        tokenizer.save(str(tokenizer_path_answer))
     else:
-        tokenizer = Tokenizer.from_file(str(tokenizer_path))
-    return tokenizer
+        tokenizer_question = Tokenizer.from_file(str(tokenizer_path_question))
+        tokenizer_answer = Tokenizer.from_file(str(tokenizer_path_answer))
+    return tokenizer_question,tokenizer_answer
 
 def get_ds(config):
-    # Load the raw dataset
-    dataset = load_dataset('mfaq', name=config)
-
+    # It only has the train split, so we divide it overselves
+    ds_r = []
+    ds_raw = []
+    with open("C:\\Users\\DELL\\Desktop\\qs_aw_vi\\datatrain.jsonl", "r", encoding="utf-8") as file:
+        for line in file:
+            ds_r.append(json.loads(line.strip()))
+    for item in ds_r:
+        ds_raw_item = item["qa_pairs"]
+        ds_raw.extend(ds_raw_item)
+                
     # Build tokenizers
-    tokenizer_src = BertTokenizer.from_pretrained(config['tokenizer_src'])
-    tokenizer_tgt = BertTokenizer.from_pretrained(config['tokenizer_tgt'])
+    tokenizer_src,tokenizer_tgt = get_or_build_tokenizer(config, ds_raw, config['question'], config['answer'])
 
     # Keep 90% for training, 10% for validation
-    train_ds_size = int(0.9 * len(dataset['train']))
-    val_ds_size = len(dataset['train']) - train_ds_size
-    train_ds_raw, val_ds_raw = random_split(dataset['train'], [train_ds_size, val_ds_size])
+    train_ds_size = int(0.9 * len(ds_raw))
+    val_ds_size = len(ds_raw) - train_ds_size
+    train_ds_raw, val_ds_raw = random_split(ds_raw, [train_ds_size, val_ds_size])
+    print("len ds_raw = :",len(ds_raw))
+    print("do dai train_ds_raw =",len(train_ds_raw))
 
     train_ds = BilingualDataset(train_ds_raw, tokenizer_src, tokenizer_tgt, config['question'], config['answer'], config['seq_len'])
     val_ds = BilingualDataset(val_ds_raw, tokenizer_src, tokenizer_tgt, config['question'], config['answer'], config['seq_len'])
@@ -160,14 +171,15 @@ def get_ds(config):
     max_len_src = 0
     max_len_tgt = 0
 
-    for item in dataset['train']:
-        src_ids = tokenizer_src.encode(item['qa_pairs'][config['question']]).input_ids
-        tgt_ids = tokenizer_tgt.encode(item['qa_pairs'][config['answer']]).input_ids
+    for item in ds_raw:
+        src_ids = tokenizer_src.encode(item[config['question']]).ids
+        tgt_ids = tokenizer_tgt.encode(item[config['answer']]).ids
         max_len_src = max(max_len_src, len(src_ids))
         max_len_tgt = max(max_len_tgt, len(tgt_ids))
 
     print(f'Max length of source sentence: {max_len_src}')
     print(f'Max length of target sentence: {max_len_tgt}')
+    
 
     train_dataloader = DataLoader(train_ds, batch_size=config['batch_size'], shuffle=True)
     val_dataloader = DataLoader(val_ds, batch_size=1, shuffle=True)

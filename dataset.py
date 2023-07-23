@@ -4,15 +4,15 @@ from torch.utils.data import Dataset
 
 class BilingualDataset(Dataset):
 
-    def __init__(self, ds, tokenizer_src, tokenizer_tgt, src_qs, tgt_aw, seq_len):
+    def __init__(self, ds, tokenizer_src, tokenizer_tgt, question, answer, seq_len):
         super().__init__()
         self.seq_len = seq_len
 
         self.ds = ds
         self.tokenizer_src = tokenizer_src
         self.tokenizer_tgt = tokenizer_tgt
-        self.src_qs = src_qs
-        self.tgt_aw = tgt_aw
+        self.question = question
+        self.answer = answer
 
         self.sos_token = torch.tensor([tokenizer_tgt.token_to_id("[SOS]")], dtype=torch.int64)
         self.eos_token = torch.tensor([tokenizer_tgt.token_to_id("[EOS]")], dtype=torch.int64)
@@ -22,8 +22,8 @@ class BilingualDataset(Dataset):
         return len(self.ds)
     def __getitem__(self, idx):
         src_target_pair = self.ds[idx]
-        src_text = src_target_pair['qa_pairs'][self.src_qs]
-        tgt_text = src_target_pair['qa_pairs'][self.tgt_aw]
+        src_text = src_target_pair[self.question]
+        tgt_text = src_target_pair[self.answer]
         max_seq_len = self.seq_len - 2  # Subtract 2 for the special tokens <s> and </s>
         src_text = src_text[:max_seq_len]
         tgt_text = tgt_text[:max_seq_len - 1] 

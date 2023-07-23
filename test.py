@@ -1,54 +1,18 @@
-""""
-{
-  "id": 2931434,
-  "language": "vi",
-  "num_pairs": 59,
-  "qa_pairs": [
-    {
-      "question": "1 kg nghệ tây có giá bao nhiêu?",
-      "answer": "Trên thị trường, nghệ tây tốt nhất chất lượng cao có giá khoảng 3000 đô la cho 2 pound (khoảng 1 kg) vì vậy với mức giá đó, một pound có thể có giá lên tới 1830 đô la.",
-      "language": "vi"
-    }
-  ]
-}
-"""
 import json
-from datasets import Dataset
+ds_raw = []  # Khởi tạo biến ds_raw ở mức độ toàn cục
+ds_r = []
+with open("C:\\Users\\DELL\\Desktop\\qs_aw_vi\\datatrain.jsonl", "r", encoding="utf-8") as file:
+    for line in file:
+        ds_r.append(json.loads(line.strip()))
 
-def load_mfag_from_file(file_path):
-    # Đọc tệp JSONL và chuyển thành một danh sách các mẫu
-    with open(file_path, "r", encoding="utf-8") as f:
-        lines = f.readlines()
+def get_all_sentences(ds_r):
     
-    samples = [json.loads(line.strip()) for line in lines]
+    for item in ds_r:
+        ds_raw_item = item["qa_pairs"]  # Đặt tên biến khác với ds_raw để tránh ghi đè
+        ds_raw.extend(ds_raw_item)  # Sử dụng extend để thêm các phần tử vào ds_raw, không ghi đè lên biến
+        # Hoặc có thể sử dụng ds_raw += ds_raw_item
 
-    # Xử lý dữ liệu và chuyển đổi thành định dạng phù hợp với datasets.Dataset
-    dataset_dict = {
-        "id": [],
-        "language": [],
-        "num_pairs": [],
-        "domain": [],
-        "qa_pairs": []
-    }
-
-    for sample in samples:
-        dataset_dict["id"].append(sample["id"])
-        dataset_dict["language"].append(sample["language"])
-        dataset_dict["num_pairs"].append(sample["num_pairs"])
-        dataset_dict["domain"].append(sample["domain"])
-        qa_pairs = [{"question": pair["question"], "answer": pair["answer"], "language": pair["language"]} for pair in sample["qa_pairs"]]
-        dataset_dict["qa_pairs"].append(qa_pairs)
-
-    dataset = Dataset.from_dict(dataset_dict)
-    return dataset
-
-# Đường dẫn tới tệp train.jsonl
-train_file_path = r"C:\Users\DELL\Desktop\qs_aw_vi\train.jsonl"
-
-
-# Tải dữ liệu từ tệp train.jsonl và chuyển thành dataset
-ds_raw = load_mfag_from_file(train_file_path)
-
-# Kiểm tra thông tin về dataset
+get_all_sentences(ds_r)
 print(ds_raw)
-
+print("len=", len(ds_raw)) 
+ # In ra chiều dài của ds_raw
